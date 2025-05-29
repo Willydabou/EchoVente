@@ -255,6 +255,20 @@ public class ProduitActionImplementation implements ProduitAction {
 		
 	}
 
+	@Override
+	public boolean produitExiste(String nomProduit) throws SQLException, ClassNotFoundException {
+	    Connection con = DbConnection.getConnection();
+	    String sql = "SELECT COUNT(*) FROM Produit WHERE nom = ?";
+	    try (PreparedStatement ps = con.prepareStatement(sql)) {
+	        ps.setString(1, nomProduit);
+	        try (ResultSet rs = ps.executeQuery()) {
+	            if (rs.next()) {
+	                return rs.getInt(1) > 0;
+	            }
+	        }
+	    }
+	    return false;
+	}
 
 
 	@Override
@@ -262,8 +276,6 @@ public class ProduitActionImplementation implements ProduitAction {
 		// TODO Auto-generated method stub
 		
 	}
-
-
 	
 	
 }

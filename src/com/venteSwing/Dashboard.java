@@ -2,23 +2,22 @@ package com.venteSwing;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.awt.event.*;
+import java.sql.*;
 
 public class Dashboard extends JPanel {
 
     private JPanel contentPanel;
+    private JButton boutonActif = null;
 
     public Dashboard() throws ClassNotFoundException {
         setLayout(new BorderLayout());
 
         // Couleurs
         Color grisClair = new Color(230, 230, 230);
-        Color bleuClair = new Color(100, 149, 237); // Cornflower blue
+        Color bleuClair = new Color(100, 149, 237); // Bleu normal
+        Color bleuFonce = new Color(65, 105, 225);  // Actif
+        Color bleuHover = new Color(120, 170, 255); // Survol
 
         // Partie gauche : menu
         JPanel menuPanel = new JPanel();
@@ -29,6 +28,7 @@ public class Dashboard extends JPanel {
         String[] boutons = {
             "Dashboard",
             "Ajouter produit",
+            "Modifier produit",
             "Catégorie de produit",
             "Modifier stock"
         };
@@ -41,8 +41,26 @@ public class Dashboard extends JPanel {
             btn.setForeground(Color.WHITE);
             btn.setFocusPainted(false);
             btn.setFont(new Font("Arial", Font.PLAIN, 14));
+            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-            btn.addActionListener(new MenuButtonListener(label));
+            // Hover effect
+            btn.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    if (btn != boutonActif) {
+                        btn.setBackground(bleuHover);
+                    }
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    if (btn != boutonActif) {
+                        btn.setBackground(bleuClair);
+                    }
+                }
+            });
+
+            btn.addActionListener(new MenuButtonListener(label, btn, bleuClair, bleuFonce));
             menuPanel.add(Box.createVerticalStrut(10));
             menuPanel.add(btn);
         }
@@ -54,8 +72,9 @@ public class Dashboard extends JPanel {
         // Ajouter les vues disponibles
         contentPanel.add(getDashboardPanel(), "Dashboard");
         contentPanel.add(new AjouterProduitPanel(), "Ajouter produit");
+        contentPanel.add(new ModifierProduitPanel(), "Modifier produit");
         contentPanel.add(new GestionCategoriePanel(), "Catégorie de produit");
-        contentPanel.add(new GestionCategoriePanel(), "Modifier stock");
+        contentPanel.add(new AjouterStockPanel(), "Modifier stock");
 
         // Diviser gauche et droite
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, menuPanel, contentPanel);
@@ -76,54 +95,44 @@ public class Dashboard extends JPanel {
         JLabel venteHier = new JLabel("🗓️ Produits vendus hier : ...", JLabel.LEFT);
         JLabel stockCritique = new JLabel("⚠️ Produits en rupture ou faible stock : ...", JLabel.LEFT);
 
-        // Requête base de données
         try (Connection conn = DbConnection.getConnection()) {
-
-            // 1. Vente de la semaine (ex : total produits vendus cette semaine)
             PreparedStatement stmtSemaine = conn.prepareStatement(
                 "SELECT SUM(quantiteAcheter) FROM Vente WHERE DATE(dateVente) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
             );
             ResultSet rsSemaine = stmtSemaine.executeQuery();
             if (rsSemaine.next()) {
-                int totalSemaine = rsSemaine.getInt(1);
-                venteSemaine.setText("📊 Vente cette semaine : " + totalSemaine);
+                venteSemaine.setText("📊 Vente cette semaine : " + rsSemaine.getInt(1));
             }
 
-            // 2. Produit le plus vendu
             PreparedStatement stmtTop = conn.prepareStatement(
-                "SELECT nom FROM Produit inner join Vente on Vente.idProduit = Produit.idProduit GROUP BY Vente.idVente ORDER BY SUM(quantiteAcheter) DESC LIMIT 3"
+                "SELECT nom FROM Produit INNER JOIN Vente ON Vente.idProduit = Produit.idProduit " +
+                "GROUP BY Produit.idProduit ORDER BY SUM(quantiteAcheter) DESC LIMIT 1"
             );
             ResultSet rsTop = stmtTop.executeQuery();
             if (rsTop.next()) {
-                String topProduit = rsTop.getString("nom");
-                produitTop.setText("🔥 Produit le plus vendu : " + topProduit);
+                produitTop.setText("🔥 Produit le plus vendu : " + rsTop.getString("nom"));
             }
 
-            // 3. Vente d'hier
             PreparedStatement stmtHier = conn.prepareStatement(
                 "SELECT SUM(quantiteAcheter) FROM Vente WHERE DATE(dateVente) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)"
             );
             ResultSet rsHier = stmtHier.executeQuery();
             if (rsHier.next()) {
-                int totalHier = rsHier.getInt(1);
-                venteHier.setText("🗓️ Produits vendus hier : " + totalHier);
+                venteHier.setText("🗓️ Produits vendus hier : " + rsHier.getInt(1));
             }
 
-            // 4. Produits en stock critique
             PreparedStatement stmtStock = conn.prepareStatement(
                 "SELECT COUNT(*) FROM Produit WHERE quantite < 10"
             );
             ResultSet rsStock = stmtStock.executeQuery();
             if (rsStock.next()) {
-                int critique = rsStock.getInt(1);
-                stockCritique.setText("⚠️ Produits en rupture ou faible stock : " + critique);
+                stockCritique.setText("⚠️ Produits en rupture ou faible stock : " + rsStock.getInt(1));
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        // Style
         Font labelFont = new Font("Arial", Font.BOLD, 16);
         Color bleuTexte = new Color(70, 130, 180);
 
@@ -138,15 +147,28 @@ public class Dashboard extends JPanel {
 
     private class MenuButtonListener implements ActionListener {
         private final String panelName;
+        private final JButton bouton;
+        private final Color normalColor;
+        private final Color activeColor;
 
-        public MenuButtonListener(String panelName) {
+        public MenuButtonListener(String panelName, JButton bouton, Color normalColor, Color activeColor) {
             this.panelName = panelName;
+            this.bouton = bouton;
+            this.normalColor = normalColor;
+            this.activeColor = activeColor;
         }
 
         @Override
         public void actionPerformed(ActionEvent e) {
-            CardLayout cl = (CardLayout)(contentPanel.getLayout());
+            CardLayout cl = (CardLayout) (contentPanel.getLayout());
             cl.show(contentPanel, panelName);
+
+            if (boutonActif != null) {
+                boutonActif.setBackground(normalColor);
+            }
+
+            bouton.setBackground(activeColor);
+            boutonActif = bouton;
         }
     }
 }

@@ -12,5 +12,6 @@ import java.util.List;
 		void updateStock(String nom, int quantite) throws ClassNotFoundException, SQLException;
 		void ajouterProduit(String nom, double prix, int quantite, String categorie)
 				throws SQLException, ClassNotFoundException;
+		boolean produitExiste(String nomProduit) throws SQLException, ClassNotFoundException;
 
 	}

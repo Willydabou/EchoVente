@@ -1,19 +1,17 @@
 package com.venteSwing;
 
 import java.awt.*;
-
 import javax.swing.*;
-
 
 public class Menu extends JFrame {
     private int marge = 20;
     private int largeur;
     private int hauteur;
-    private JPanel contentPanel; // Panel principal qu'on modifie dynamiquement
+    private JPanel contentPanel;
     private String role;
 
     public Menu(String role) {
-    	 this.role = role;
+        this.role = role;
         initialize();
     }
 
@@ -31,79 +29,74 @@ public class Menu extends JFrame {
         // Couleurs
         Color bleuMarine = new Color(0, 0, 102);
         Color bleuRoi = new Color(65, 105, 225);
+        Color boutonActif = new Color(100, 149, 237); // Bleu clair
 
-        // Création du menu
-        JMenu accueil = new JMenu("Accueil");
-        JMenu produit = new JMenu("Liste de Vente");
-        JMenu dashboard = new JMenu("Dashboard");
+        // Panel de boutons
+        JPanel menuPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
+        menuPanel.setBackground(bleuRoi);
 
-        JMenuBar menuBar = new JMenuBar();
-        menuBar.setBackground(bleuMarine);
-        menuBar.setPreferredSize(new Dimension((int)(largeur * 0.7), 40));
-        if (role.equals("vendeur")) {
-            menuBar.add(accueil);
-            menuBar.add(produit);
-           
-        } else if (role.equals("admin")) {
-           
-            menuBar.add(dashboard);
-            menuBar.add(accueil);
-            menuBar.add(produit);
-            // tu peux ajouter d'autres menus propres à l'admin
+        // Création des boutons
+        JButton accueilBtn = new JButton("Accueil");
+        JButton produitBtn = new JButton("Liste de Vente");
+        JButton dashboardBtn = new JButton("Dashboard");
+
+        // Regrouper tous les boutons
+        JButton[] buttons = {accueilBtn, produitBtn, dashboardBtn};
+
+        // Style commun
+        for (JButton btn : buttons) {
+            btn.setFocusPainted(false);
+            btn.setBorderPainted(false);
+            btn.setBackground(bleuMarine);
+            btn.setForeground(Color.WHITE);
+            btn.setFont(new Font("Arial", Font.BOLD, 14));
+            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
 
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 5));
-        topPanel.setBackground(bleuRoi);
-        topPanel.add(menuBar);
-        add(topPanel, BorderLayout.NORTH);
+        // Ajouter les boutons selon le rôle
+        if (role.equals("vendeur")) {
+            menuPanel.add(accueilBtn);
+            menuPanel.add(produitBtn);
+        } else if (role.equals("admin")) {
+            menuPanel.add(dashboardBtn);
+            menuPanel.add(accueilBtn);
+            menuPanel.add(produitBtn);
+        }
 
-        // ⚠️ N’utilise pas une nouvelle variable ici — utilise l’attribut !
+        // Ajouter le panel de menu en haut
+        add(menuPanel, BorderLayout.NORTH);
+
+        // Panel principal
         contentPanel = new JPanel(new BorderLayout());
         contentPanel.setBackground(Color.WHITE);
         add(contentPanel, BorderLayout.CENTER);
 
-        // Affiche le panel de vente par défaut
+        // Affichage du panel Accueil par défaut
         showPanel(new Vendre());
+        setActiveButton(accueilBtn, buttons); // bouton actif par défaut
 
-        // Actions des menus
-        accueil.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override
-            public void menuSelected(javax.swing.event.MenuEvent e) {
-                showPanel(new Vendre());
-            }
-
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        // Actions
+        accueilBtn.addActionListener(e -> {
+            showPanel(new Vendre());
+            setActiveButton(accueilBtn, buttons);
         });
 
-        produit.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override
-            public void menuSelected(javax.swing.event.MenuEvent e) {
-                try {
-                    // Tu peux aussi créer un JPanel personnalisé ici si tu veux l’intégrer dans le contentPanel
-                    showPanel(new ListeVente()); // à créer
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+        produitBtn.addActionListener(e -> {
+            try {
+                showPanel(new ListeVente());
+                setActiveButton(produitBtn, buttons);
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
-
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
 
-        dashboard.addMenuListener(new javax.swing.event.MenuListener() {
-            @Override
-            public void menuSelected(javax.swing.event.MenuEvent e) {
-                try {
-                    // Tu peux aussi créer un JPanel personnalisé ici si tu veux l’intégrer dans le contentPanel
-                    showPanel(new Dashboard()); 
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+        dashboardBtn.addActionListener(e -> {
+            try {
+                showPanel(new Dashboard());
+                setActiveButton(dashboardBtn, buttons);
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
-
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
         });
 
         setVisible(true);
@@ -114,5 +107,15 @@ public class Menu extends JFrame {
         contentPanel.add(panel, BorderLayout.CENTER);
         contentPanel.revalidate();
         contentPanel.repaint();
+    }
+
+    private void setActiveButton(JButton activeButton, JButton[] allButtons) {
+        for (JButton btn : allButtons) {
+            if (btn == activeButton) {
+                btn.setBackground(new Color(100, 149, 237)); // Bleu clair
+            } else {
+                btn.setBackground(new Color(0, 0, 102)); // Bleu marine
+            }
+        }
     }
 }

@@ -48,6 +48,11 @@ public class ListeVente extends JPanel {
     private int largeur ;
     private int hauteur;
     private JButton btnTelecharger;
+    private int currentPage = 1;
+    private int rowsPerPage = 30;
+    private int totalRows = 0;
+    private JButton btnSuivant, btnPrecedent;
+
 
     public ListeVente() throws ClassNotFoundException {
         setName("Liste des Ventes");
@@ -128,8 +133,40 @@ public class ListeVente extends JPanel {
         panelFiltre.add(btnSelectionnerTout);
 
         add(panelFiltre, BorderLayout.NORTH);
-        add(btnTelecharger, BorderLayout.SOUTH);
+//        add(btnTelecharger, BorderLayout.SOUTH);
         
+        JPanel paginationPanel = new JPanel();
+        btnPrecedent = new JButton("Précédent");
+        btnSuivant = new JButton("Suivant");
+
+        btnPrecedent.addActionListener(e -> {
+            if (currentPage > 1) {
+                currentPage--;
+                try {
+                    chargerVentesActuelle();
+                } catch (ClassNotFoundException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        btnSuivant.addActionListener(e -> {
+            int maxPage = (int) Math.ceil((double) totalRows / rowsPerPage);
+            if (currentPage < maxPage) {
+                currentPage++;
+                try {
+                    chargerVentesActuelle();
+                } catch (ClassNotFoundException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        paginationPanel.add(btnPrecedent);
+        paginationPanel.add(btnSuivant);
+        paginationPanel.add(btnTelecharger);
+        add(paginationPanel, BorderLayout.SOUTH);
+
         
 
         // Charger les ventes
@@ -194,13 +231,38 @@ public class ListeVente extends JPanel {
             query += " ORDER BY v.quantiteAcheter DESC";
         }
 
-        try (Connection con = DbConnection.getConnection();
-             Statement stmt = con.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+     // Compter le total
+        String countQuery = "SELECT COUNT(*) AS total FROM Vente v JOIN Produit p ON v.idProduit = p.idProduit";
+        if (!filtre.isEmpty()) {
+            String[] parts = filtre.split(":");
+            String critere = parts[0];
+            String valeur = parts.length > 1 ? parts[1] : "";
 
+            if (critere.equals("Nom du produit")) {
+                countQuery += " WHERE p.nom LIKE '%" + valeur + "%'";
+            } else if (critere.equals("Date")) {
+                countQuery += " WHERE DATE_FORMAT(v.dateVente, '%Y-%m-%d') LIKE '%" + valeur + "%'";
+            } else if (critere.equals("Quantité")) {
+                countQuery += " WHERE v.quantiteAcheter >= " + valeur;
+            }
+        }
+
+        try (Connection con = DbConnection.getConnection();
+             Statement stmt = con.createStatement()) {
+
+            ResultSet rsCount = stmt.executeQuery(countQuery);
+            if (rsCount.next()) {
+                totalRows = rsCount.getInt("total");
+            }
+
+            // Appliquer tri et limite
+            int offset = (currentPage - 1) * rowsPerPage;
+            query += " LIMIT " + rowsPerPage + " OFFSET " + offset;
+
+            ResultSet rs = stmt.executeQuery(query);
             while (rs.next()) {
                 Vector<Object> row = new Vector<>();
-                row.add(false);  // Initialisation de la case à cocher
+                row.add(false);  // case à cocher
                 row.add(rs.getInt("idVente"));
                 row.add(rs.getString("produit"));
                 row.add(rs.getInt("quantiteAcheter"));
@@ -208,12 +270,29 @@ public class ListeVente extends JPanel {
                 row.add(rs.getString("dateVente"));
                 model.addRow(row);
             }
+
+            // Activer/désactiver les boutons selon la page
+            btnPrecedent.setEnabled(currentPage > 1);
+            int maxPage = (int) Math.ceil((double) totalRows / rowsPerPage);
+            btnSuivant.setEnabled(currentPage < maxPage);
+
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erreur lors du chargement des ventes");
         }
+
     }
 
+  
+   
+    private void chargerVentesActuelle() throws ClassNotFoundException {
+        String critere = (String) comboFiltre.getSelectedItem();
+        String valeur = txtRecherche.getText();
+        String filtre = critere.equals("Tout") ? "" : critere + ":" + valeur;
+        String ordreTri = "";  // définir dynamiquement si besoin
+        chargerVentes(filtre, ordreTri);
+    }
+    
     private void telechargerSelection() {
         int rowCount = model.getRowCount();
         boolean hasSelection = false;

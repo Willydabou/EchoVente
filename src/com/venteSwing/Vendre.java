@@ -2,13 +2,16 @@ package com.venteSwing;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.TableModelEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
+@SuppressWarnings("serial")
 public class Vendre extends JPanel {
 
     // Colonne gauche : tableau des produits sélectionnés
@@ -31,22 +34,10 @@ public class Vendre extends JPanel {
     private List<Produit> allProducts;
     private int currentPage = 0;
     private final int pageSize = 20; // Nombre d'éléments par page
-    private int marge = 10;
-    private int largeur ;
-    private int hauteur;
-    
+    private  double totalGlobal = 0.0;
     		
-
     public Vendre() {
     	
-//        setTitle("EcoVente - PPN");
-//        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        
-//        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-//        largeur = screenSize.width - marge;
-//        hauteur = screenSize.height - marge;
-//        setSize(largeur, hauteur);
-//        setLocationRelativeTo(null); // Pour centrer la fenêtre, si besoin
 
         try {
             initData(); // Chargement des produits depuis la base de données
@@ -83,8 +74,7 @@ public class Vendre extends JPanel {
     /**
      * Initialise et dispose les composants de l'interface.
      */
-    @SuppressWarnings("serial")
-	private void initComponents() {
+    private void initComponents() {
 
      // Utilisation d'un JSplitPane pour diviser le panel en deux colonnes
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
@@ -100,22 +90,37 @@ public class Vendre extends JPanel {
         leftPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         leftPanel.add(new JLabel("Produits sélectionnés"), BorderLayout.NORTH);
 
-        selectedProductsModel = new DefaultTableModel(new Object[]{"Nom produit", "Prix", "Quantité à acheter", "Somme Prix"}, 0) {
+        selectedProductsModel = new DefaultTableModel(new Object[]{"Nom produit", "Prix", "Quantité à acheter", "Somme Prix", "Supprimer"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                // Seule la colonne "Quantité à acheter" est modifiable
-                return column == 2;
+                return column == 2 || column == 4; // Quantité et bouton supprimer
+            }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 4) return JButton.class;
+                return super.getColumnClass(columnIndex);
             }
         };
+
 
         selectedProductsTable = new JTable(selectedProductsModel);
 
         // Écouteur pour mettre à jour la colonne "Somme Prix" lorsqu'on modifie la quantité
+     // Ce JLabel affichera le total final (placé sous le tableau)
+        JLabel totalLabel = new JLabel("Total: 0.00 Ar");
+        JLabel rowCountLabel = new JLabel("Articles: 0");
+        totalLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        totalLabel.setForeground(new Color(0, 102, 153)); // Bleu foncé
+        leftPanel.add(totalLabel, BorderLayout.SOUTH);
+
+       
+     // Mettre à jour la "Somme Prix" quand la quantité est modifiée
         selectedProductsTable.getModel().addTableModelListener(e -> {
             int row = e.getFirstRow();
             int column = e.getColumn();
 
-            if (column == 2) { // Vérifier si la quantité a été modifiée
+            if (column == 2) { // colonne "Quantité"
                 try {
                     Object quantityObj = selectedProductsModel.getValueAt(row, 2);
                     Object priceObj = selectedProductsModel.getValueAt(row, 1);
@@ -129,19 +134,53 @@ public class Vendre extends JPanel {
                             double price = Double.parseDouble(priceStr);
                             double total = price * quantity;
 
-                            // Mettre à jour la colonne "Somme Prix"
-                            selectedProductsModel.setValueAt(total, row, 3);
+                            // Mettre à jour la cellule Somme Prix
+                            selectedProductsModel.setValueAt(String.format(Locale.US, "%.2f", total), row, 3);
+
+                            // Lancer le recalcul total APRÈS que Swing ait fini la mise à jour
+                            SwingUtilities.invokeLater(() -> {
+                               
+                            	double totalSomme = 0;
+                            	for (int i = 0; i < selectedProductsModel.getRowCount(); i++) {
+                            	    Object sommeObj = selectedProductsModel.getValueAt(i, 3);
+                            	    if (sommeObj != null) {
+                            	        try {
+                            	        	totalSomme += Double.parseDouble(sommeObj.toString());
+                            	        } catch (NumberFormatException ignored) {}
+                            	    }
+                            	}
+                            	totalLabel.setText("Total: " + String.format("%.2f", totalSomme) + " Ar");
+
+                            });
                         }
                     }
                 } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(null, "Veuillez entrer un nombre valide pour la quantité.", "Erreur de saisie", JOptionPane.ERROR_MESSAGE);
-                    selectedProductsModel.setValueAt(1, row, 2); // Remettre à 1 en cas d'erreur
+                    JOptionPane.showMessageDialog(null,
+                            "Veuillez entrer un nombre valide pour la quantité.",
+                            "Erreur de saisie",
+                            JOptionPane.ERROR_MESSAGE);
+                    selectedProductsModel.setValueAt(1, row, 2); // Remettre à 1
                 }
             }
+            totalLabel.setText("Total: " + String.format("%.2f", totalGlobal) + " Ar");
         });
-        
-        
+        totalLabel.setText("Total: " + String.format("%.2f", totalGlobal) + " Ar");
+//        JButton btnCalculerTotal = new JButton("Recalculer Total");
+//        btnCalculerTotal.addActionListener(e -> {
+//            double total = 0;
+//            for (int i = 0; i < selectedProductsModel.getRowCount(); i++) {
+//                Object sommeObj = selectedProductsModel.getValueAt(i, 3);
+//                if (sommeObj != null) {
+//                    try {
+//                        total += Double.parseDouble(sommeObj.toString());
+//                    } catch (NumberFormatException ignored) {}
+//                }
+//            }
+//            totalLabel.setText("Total: " + String.format("%.2f", total) + " Ar");
+//        });
 
+        selectedProductsTable.getColumn("Supprimer").setCellRenderer(new ButtonRenderer());
+        selectedProductsTable.getColumn("Supprimer").setCellEditor(new ButtonEditor(new JCheckBox(), selectedProductsModel, selectedProductsTable, totalLabel, rowCountLabel));
         // Ajout du tableau dans un JScrollPane pour le défilement
         JScrollPane leftScrollPane = new JScrollPane(selectedProductsTable);
         leftPanel.add(leftScrollPane, BorderLayout.CENTER);
@@ -149,7 +188,7 @@ public class Vendre extends JPanel {
      // Panneau pour le bouton d'enregistrement
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         JButton btnEnregistrer = new JButton("Enregistrer");
-        JButton btnListeVente = new JButton("Voir la liste de vente");
+        
 
         // Action du bouton
         btnEnregistrer.addActionListener(e -> {
@@ -165,18 +204,8 @@ public class Vendre extends JPanel {
 			}
 		});
         
-        btnListeVente.addActionListener(e ->{
-        	try {
-				new ListeVente();
-			} catch (ClassNotFoundException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-        });        
-
         bottomPanel.add(btnEnregistrer);
-        bottomPanel.add(btnListeVente);
-        
+        bottomPanel.add(totalLabel);
         leftPanel.add(bottomPanel, BorderLayout.SOUTH);
 
 
@@ -487,4 +516,6 @@ public class Vendre extends JPanel {
             ui.setVisible(true);
         });
     }
+    
+    
 }
